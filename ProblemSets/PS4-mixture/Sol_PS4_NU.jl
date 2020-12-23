@@ -102,3 +102,107 @@ draws = rand(c,1_000_000)
 println((b-a)*mean(draws.^2 .*pdf.(d,draws)))
 println((b-a)*mean(draws .*pdf.(d,draws)))
 println((b-a)*mean(pdf.(d,draws)))
+
+## 4. Question 1 code to optimize the expression using quadrature
+	## Caution: do not try to run
+
+function mlogit_Z_Quad(theta, X, Z, y, R)
+
+		alpha = theta[1:end-2]
+		gamma = theta[end-1]
+		sigma = exp(theta[end]) # makes sure sigma is never 0 (which would make the Normal density undefined)
+
+		K = size(X,2)
+		J = length(unique(y))
+		N = length(y)
+		bigY = zeros(N,J)
+
+		# Matrix with a column equal 1 if y equals that alternative
+		for j=1:J
+			bigY[:,j] = y.==j
+		end
+
+		## Matrix of parameters, normalice last alternative to zero
+		bigAlpha = [reshape(alpha,K,J-1) zeros(K)]
+
+		T = promote_type(eltype(X),eltype(theta))
+
+		# Write probability as a function of variable of integration
+		function ll_int(T,N,J,X,Z,bigAlpha,gamma,sigma,R)
+			c = Uniform(-4*sigma,4*sigma)
+			draws = rand(c,R)
+			#nodes, weights = lgwt(R,-4*sigma,4*sigma)
+			out = zeros(T,N)
+
+			for r=1:R
+				num = zeros(T,N,J)
+				den = zeros(T,N)
+				Prob = zeros(T,N,J)
+				for j=1:J
+					num[:,j] = exp.(X*bigAlpha[:,j] .+ (Z[:,j] .- Z[:,J])*nodes[r])
+					den .+= num[:,j]
+				end
+				Prob = num./repeat(den,1,J)
+				out .+= vec( weights[r]*(prod(Prob.^bigY; dims=2))*pdf(Normal(gamma,sigma), nodes[r]))
+				# We use vec because vectors in Julia are "flat" and this operator flattens a one dimensional array.
+			end
+			return out
+		end
+
+		intll = ll_int(T,N,J,X,Z,bigAlpha,gamma,sigma,R)
+		ll = -sum(log.(intll))
+
+		return ll
+
+end
+
+## 5. Question 1 code to optimize the expression using Monte Carlo simulation
+	## Caution: do not try to run
+
+	function mlogit_Z_MonteC(theta, X, Z, y, R)
+
+			alpha = theta[1:end-2]
+			gamma = theta[end-1]
+			sigma = exp(theta[end]) # makes sure sigma is never 0 (which would make the Normal density undefined)
+
+			K = size(X,2)
+			J = length(unique(y))
+			N = length(y)
+			bigY = zeros(N,J)
+
+			# Matrix with a column equal 1 if y equals that alternative
+			for j=1:J
+				bigY[:,j] = y.==j
+			end
+
+			## Matrix of parameters, normalice last alternative to zero
+			bigAlpha = [reshape(alpha,K,J-1) zeros(K)]
+
+			T = promote_type(eltype(X),eltype(theta))
+
+			# Write probability as a function of variable of integration
+			function ll_int(T,N,J,X,Z,bigAlpha,gamma,sigma,R)
+				nodes, weights = lgwt(R,-4*sigma,4*sigma)
+				out = zeros(T,N)
+
+				for r=1:R
+					num = zeros(T,N,J)
+					den = zeros(T,N)
+					Prob = zeros(T,N,J)
+					for j=1:J
+						num[:,j] = exp.(X*bigAlpha[:,j] .+ (Z[:,j] .- Z[:,J])*nodes[r])
+						den .+= num[:,j]
+					end
+					Prob = num./repeat(den,1,J)
+					out .+= vec( (8*sigma/R)*(prod(Prob.^bigY; dims=2))*pdf(Normal(gamma,sigma), draws[r]))
+					# We use vec because vectors in Julia are "flat" and this operator flattens a one dimensional array.
+				end
+				return out
+			end
+
+			intll = ll_int(T,N,J,X,Z,bigAlpha,gamma,sigma,R)
+			ll = -sum(log.(intll))
+
+			return ll
+
+	end
