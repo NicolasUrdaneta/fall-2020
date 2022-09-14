@@ -7,6 +7,7 @@
 ## Install & load packages
 
 #=
+using Pkg
 Pkg.add("JLD")
 Pkg.add("JLD2")
 Pkg.add("Random")
